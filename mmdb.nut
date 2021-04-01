@@ -31,16 +31,90 @@ MMDB.GetMetadata <- function()
 {
     if (MMDB.Metadata == null)
     {
-        print("reading metadata.\n");
+        // print("reading metadata.\n");
         MMDB.f.seek(MMDB.getMetadataPos());
         MMDB.Metadata <- MMDB.decodeData();
     }
     else
     {
-        print("already have metadata.\n");
+        // print("already have metadata.\n");
     }
     
     return MMDB.Metadata;
+}
+
+MMDB.Lookup <- function(ipAddrStr)
+{
+    // print("LOOKUP START\n");
+
+    local recordSizeBits = MMDB.Metadata.record_size;
+    local nodeSizeBits = 2 * recordSizeBits;
+    local nodeCount = MMDB.Metadata.node_count;
+    local treeSize = ((recordSizeBits * 2) / 8) * nodeCount;
+
+    if (MMDB.Metadata.ip_version != 6)
+    {
+        throw "only IPV6 databases are supported for now";
+    }
+
+    if (recordSizeBits != 24)
+    {
+        throw "only record size 24 is supported for now";
+    }
+
+    /* get IP address binary representation */
+
+    local parts = split(ipAddrStr, ".");
+    if (parts.len() != 4)
+    {
+        throw "only IPV4 addresses are supported for now";
+    }
+
+    local repr = blob(4);
+    for (local i = 0; i < parts.len(); ++i)
+    {
+        local n = parts[i].tointeger();
+        repr.writen(n, 'b');
+    }
+
+    MMDB.f.seek(96 * nodeSizeBits / 8); // skip first 96 nodes
+
+    for (local i = 0; i < repr.len(); ++i)
+    {
+        local byte = repr[i];
+        for (local j = 0; j < 8; ++j)
+        {
+            local bit = MMDB.getBit(byte, j);
+
+            if (bit == 1) // right record
+            {
+                MMDB.f.seek(recordSizeBits / 8, 'c');
+            } // else, if left record, we are already in the correct position
+            local record = MMDB.readBytes((recordSizeBits / 8).tointeger());
+            local recordVal = MMDB.blobReadNumber(record, recordSizeBits / 8);
+
+            if (recordVal < nodeCount)
+            {
+                local absoluteOffset = recordVal * nodeSizeBits / 8;
+                MMDB.f.seek(absoluteOffset);
+            }
+            else if (recordVal == nodeCount)
+            {
+                throw "IP address does not exist in database";
+            }
+            else // recordVal > nodeCount
+            {
+                local absoluteOffset = (recordVal - nodeCount) + treeSize; // given formula
+                MMDB.f.seek(absoluteOffset);
+                local info = MMDB.decodeData();
+
+                print("country: " + info.country.names.en + " (" + info.country.iso_code + ")\n");
+                print("continent: " + info.continent.names.en + "\n");
+                
+                return;
+            }
+        }
+    }
 }
 
 /* find blob in file */
@@ -113,7 +187,7 @@ MMDB.rFindBlob <- function(str)
     return null;
 }
 
-/* data decode */
+/* data helpers */
 
 MMDB.blobToString <- function(b)
 {
@@ -125,17 +199,31 @@ MMDB.blobToString <- function(b)
     return result;
 }
 
+MMDB.getBit <- function(byte, i)
+{
+    local mask = pow(2, 7 - i).tointeger();
+    return (byte & mask) >>> (7 - i);
+}
+
+/* data decode */
+
 MMDB.advance <- function()
 {
     MMDB.f.seek(1, 'c');
 }
 
-MMDB.readByte <- function()
+MMDB.readBytes <- function(size)
 {
     local pos = MMDB.f.tell();
-    local byte = MMDB.f.readblob(1)[0];
-    MMDB.f.seek(pos + 1);
-    return byte;
+    local data = blob(3);
+    data.writeblob(MMDB.f.readblob(size));
+    MMDB.f.seek(pos + size);
+    return data;
+}
+
+MMDB.readByte <- function()
+{
+    return MMDB.readBytes(1)[0];
 }
 
 MMDB.readNumber <- function(size)
@@ -153,6 +241,17 @@ MMDB.readNumber <- function(size)
     return result;
 }
 
+MMDB.blobReadNumber <- function(b, size)
+{
+    local result = 0;
+    for (local i = 0; i < size; ++i)
+    {
+        local n = b[i];
+        result += n * pow(256, size - i - 1);
+    }
+    return result;
+}
+
 MMDB.readControlByte <- function()
 {
     local controlByte = MMDB.readByte();
@@ -165,9 +264,17 @@ MMDB.readControlByte <- function()
         dataFormat = 7 + MMDB.readByte();
     }
 
-    if (dataSize >= 29)
+    if (dataSize == 29)
     {
-        throw "can't deal with long payload sizes";
+        dataSize = 29 + MMDB.readByte();
+    }
+    else if (dataSize == 30)
+    {
+        dataSize = 285 + pow(2, 8)*MMDB.readByte() + MMDB.readByte();
+    }
+    else if (dataSize == 31)
+    {
+        dataSize = 65821 + pow(2, 16)*MMDB.readByte() + pow(2, 8)*MMDB.readByte() + MMDB.readByte();
     }
 
     return {
@@ -178,43 +285,38 @@ MMDB.readControlByte <- function()
 
 MMDB.decodeData <- function()
 {
-    // print("decode data. pos = " + MMDB.f.tell() + "\n");
-
     local controlInfo = MMDB.readControlByte();
     local dataFormat = controlInfo.f;
     local dataSize = controlInfo.s;
 
-    // print("data format = " + dataFormat + "\n");
-    // print("data size = " + dataSize + "\n");
-
     switch (dataFormat)
     {
-        // case 1:
-        //     return MMDB.decodePointer(dataSize);
-        //     break;
+        case 1:
+            return MMDB.decodePointer(dataSize);
+            break;
         case 2:
             return MMDB.decodeString(dataSize);
             break;
         case 3:
             return MMDB.decodeDouble(dataSize);
             break;
-        // case 4:
-        //     return MMDB.decodeBytes(dataSize);
-        //     break;
+        case 4:
+            return MMDB.decodeBytes(dataSize);
+            break;
         case 5:
-            return MMDB.decodeU16(dataSize);
+            return MMDB.decodeUInt(dataSize);
             break;
         case 6:
-            return MMDB.decodeU32(dataSize);
+            return MMDB.decodeUInt(dataSize);
             break;
         // case 8:
         //     return MMDB.decodeI32(dataSize);
         //     break;
         case 9:
-            return MMDB.decodeU64(dataSize);
+            return MMDB.decodeUInt(dataSize);
             break;
         // case 10:
-        //     return MMDB.decodeU128(dataSize);
+        //     return MMDB.decodeUInt(dataSize);
         //     break;
         case 7:
             return MMDB.decodeMap(dataSize);
@@ -225,12 +327,12 @@ MMDB.decodeData <- function()
         // case 12:
         //     return MMDB.decodeDataCacheContainer(dataSize);
         //     break;
-        case 13:
-            return MMDB.decodeEndMarker(dataSize);
-            break;
-        // case 14:
-        //     return MMDB.decodeBoolean(dataSize);
+        // case 13:
+        //     return MMDB.decodeEndMarker(dataSize);
         //     break;
+        case 14:
+            return MMDB.decodeBoolean(dataSize);
+            break;
         // case 15:
         //     return MMDB.decodeFloat(dataSize);
         //     break;
@@ -239,9 +341,51 @@ MMDB.decodeData <- function()
     }
 }
 
+MMDB.decodePointer <- function(value)
+{
+    local result;
+
+    // first two bits indicate size
+    local size = 2*MMDB.getBit(value, 3 + 0) + MMDB.getBit(value, 3 + 1);
+
+    // last three bits are used for the address
+    local addrPart = 3*MMDB.getBit(value, 3 + 2) + 2*MMDB.getBit(value, 3 + 3) + MMDB.getBit(value, 3 + 4);
+
+    local dataSectionStart = 16 + ((MMDB.Metadata.record_size * 2) / 8) * MMDB.Metadata.node_count; // given formula
+    local p;
+    if (size == 0)
+    {
+        p = pow(2, 8)*addrPart + MMDB.readByte();
+    }
+    else if (size == 1)
+    {
+        p = pow(2, 16)*addrPart + pow(2, 8)*MMDB.readByte() + MMDB.readByte() + 2048;
+    }
+    else if (size == 2)
+    {
+        p = pow(2, 24)*addrPart + pow(2, 16)*MMDB.readByte() + pow(2, 8)*MMDB.readByte() + MMDB.readByte() + 526336;
+    }
+    else if (size == 3)
+    {
+        p = MMDB.readNumber(4);
+    }
+    else
+    {
+        throw "invalid pointer size " + size;
+    }
+    local absoluteOffset = dataSectionStart + p;
+    local localPos = MMDB.f.tell();
+
+    MMDB.f.seek(absoluteOffset);
+    result = MMDB.decodeData();
+
+    MMDB.f.seek(localPos);
+    
+    return result;
+}
+
 MMDB.decodeString <- function(size)
 {
-    // print("string length = " + size + "\n");
     local pos = MMDB.f.tell();
     local b = MMDB.f.readblob(size);
     local result = MMDB.blobToString(b);
@@ -251,40 +395,34 @@ MMDB.decodeString <- function(size)
 
 MMDB.decodeDouble <- function(size)
 {
-    // print("double size = " + size + "\n");
     local pos = MMDB.f.tell();
     local result = MMDB.f.readn('d');
     MMDB.f.seek(pos + 8);
     return result;
 }
 
-MMDB.decodeU16 <- function(size)
+MMDB.decodeBytes <- function(size)
 {
-    // print("U16 size = " + size + "\n");
-    if (size > 2)
+    local result;
+    local pos = MMDB.f.tell();
+    if (size == 0)
     {
-        throw "unexpected size = " + size + " for U16.";
+        result = null;
     }
-    return MMDB.readNumber(size);
+    else
+    {
+        result = MMDB.readBytes(size);
+    }
+    MMDB.f.seek(pos + size);
+    return result;
 }
 
-MMDB.decodeU32 <- function(size)
+MMDB.decodeUInt <- function(size)
 {
-    // print("U32 size = " + size + "\n");
-    if (size > 4)
-    {
-        throw "unexpected size = " + size + " for U32.";
-    }
-    return MMDB.readNumber(size);
-}
-
-MMDB.decodeU64 <- function(size)
-{
-    // print("U64 size = " + size + "\n");
-    if (size > 8)
-    {
-        throw "unexpected size = " + size + " for U64.";
-    }
+    // if (size > 8)
+    // {
+    //     throw "unexpected size = " + size + " for UInt.";
+    // }
     return MMDB.readNumber(size);
 }
 
@@ -292,18 +430,12 @@ MMDB.decodeMap <- function(entryCount)
 {
     local result = {};
 
-    // print("[MAP]\nmap entry count = " + entryCount + "\n");
-
     for (local readCount = 0; readCount < entryCount; ++readCount)
     {
         local key = MMDB.decodeData();
-        // print("map entry key = " + key + "\n");
         local value = MMDB.decodeData();
-        // print("map entry value = " + value + "\n");
         result[key] <- value;
     }
-
-    // print("[END MAP]\n");
 
     return result;
 }
@@ -312,16 +444,16 @@ MMDB.decodeArray <- function(itemCount)
 {
     local result = [];
 
-    // print("[ARRAY]\narray item count = " + itemCount + "\n");
-
     for (local readCount = 0; readCount < itemCount; ++readCount)
     {
         local value = MMDB.decodeData();
-        // print("list item value = " + value + "\n");
         result.push(value);
     }
 
-    // print("[END ARRAY]\n");
-
     return result;
+}
+
+MMDB.decodeBoolean <- function(value)
+{
+    return value ? true : false;
 }
