@@ -103,6 +103,16 @@ MMDB.rFindBlob <- function(str)
 
 /* data decode */
 
+MMDB.blobToString <- function(b)
+{
+    local result = "";
+    for (local i = 0; i < b.len(); ++i)
+    {
+        result += b[i].tochar();
+    }
+    return result;
+}
+
 MMDB.advance <- function()
 {
     MMDB.File.seek(1, 'c');
@@ -221,7 +231,8 @@ MMDB.decodeString <- function(size)
 {
     print("string length = " + size + "\n");
     local pos = MMDB.File.tell();
-    local result = MMDB.File.readblob(size);
+    local b = MMDB.File.readblob(size);
+    local result = MMDB.blobToString(b);
     MMDB.File.seek(pos + size);
     return result;
 }
