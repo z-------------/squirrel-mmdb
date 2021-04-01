@@ -238,40 +238,31 @@ MMDB.decodeDouble <- function(size)
 MMDB.decodeU16 <- function(size)
 {
     print("U16 size = " + size + "\n");
-    if (size <= 2)
-    {
-        return MMDB.readNumber(size);
-    }
-    else
+    if (size > 2)
     {
         throw "unexpected size = " + size + " for U16.";
     }
+    return MMDB.readNumber(size);
 }
 
 MMDB.decodeU32 <- function(size)
 {
     print("U32 size = " + size + "\n");
-    if (size <= 4)
-    {
-        return MMDB.readNumber(size);
-    }
-    else
+    if (size > 4)
     {
         throw "unexpected size = " + size + " for U32.";
     }
+    return MMDB.readNumber(size);
 }
 
 MMDB.decodeU64 <- function(size)
 {
     print("U64 size = " + size + "\n");
-    if (size <= 8)
-    {
-        return MMDB.readNumber(size);
-    }
-    else
+    if (size > 8)
     {
         throw "unexpected size = " + size + " for U64.";
     }
+    return MMDB.readNumber(size);
 }
 
 MMDB.decodeMap <- function(entryCount)
