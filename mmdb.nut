@@ -121,24 +121,6 @@ MMDB.getMetadataPos <- function()
     return metadataMarkerPos + MMDB.metadataMarker.len();
 }
 
-MMDB.blobAreEqual <- function(a, b)
-{
-    local aLen = a.len();
-    local bLen = b.len();
-
-    if (aLen != bLen) return false;
-
-    for (local i = 0; i < aLen; ++i)
-    {
-        if (a[i] != b[i])
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 MMDB.findBlob <- function(str)
 {
     local strLen = str.len();
@@ -184,6 +166,24 @@ MMDB.rFindBlob <- function(str)
 }
 
 /* data helpers */
+
+MMDB.blobAreEqual <- function(a, b)
+{
+    local aLen = a.len();
+    local bLen = b.len();
+
+    if (aLen != bLen) return false;
+
+    for (local i = 0; i < aLen; ++i)
+    {
+        if (a[i] != b[i])
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
 
 MMDB.blobToString <- function(b)
 {
