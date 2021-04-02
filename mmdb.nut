@@ -197,7 +197,7 @@ MMDB.advance <- function()
 MMDB.readBytes <- function(size)
 {
     local pos = MMDB.f.tell();
-    local data = blob(3);
+    local data = blob(size);
     data.writeblob(MMDB.f.readblob(size));
     MMDB.f.seek(pos + size);
     return data;
