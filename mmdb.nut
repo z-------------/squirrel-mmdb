@@ -67,7 +67,7 @@ MMDB.Lookup <- function(ipAddrStr)
     local parts = split(ipAddrStr, ".");
     if (parts.len() != 4)
     {
-        throw "only IPV4 addresses are supported for now";
+        throw "only IPv4 addresses are supported for now";
     }
 
     local repr = blob(4);
