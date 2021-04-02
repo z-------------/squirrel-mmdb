@@ -305,9 +305,9 @@ MMDB.decodeData <- function()
         case 6:
             return MMDB.decodeUInt(dataSize);
             break;
-        // case 8:
-        //     return MMDB.decodeI32(dataSize);
-        //     break;
+        case 8:
+            return MMDB.decodeI32(dataSize);
+            break;
         case 9:
             return MMDB.decodeUInt(dataSize);
             break;
@@ -420,6 +420,18 @@ MMDB.decodeUInt <- function(size)
     //     throw "unexpected size = " + size + " for UInt.";
     // }
     return MMDB.readNumber(size);
+}
+
+MMDB.decodeI32 <- function(size)
+{
+    if (size != 4)
+    {
+        throw "unexpected size = " + size + " for I32.";
+    }
+    local pos = MMDB.f.tell();
+    local result = MMDB.f.readn('i');
+    MMDB.f.seek(pos + 4);
+    return result;
 }
 
 MMDB.decodeMap <- function(entryCount)
