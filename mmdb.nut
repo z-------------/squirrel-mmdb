@@ -329,9 +329,9 @@ MMDB.decodeData <- function()
         case 14:
             return MMDB.decodeBoolean(dataSize);
             break;
-        // case 15:
-        //     return MMDB.decodeFloat(dataSize);
-        //     break;
+        case 15:
+            return MMDB.decodeFloat(dataSize);
+            break;
         default:
             throw "can't deal with data format " + dataFormat;
     }
@@ -452,4 +452,12 @@ MMDB.decodeArray <- function(itemCount)
 MMDB.decodeBoolean <- function(value)
 {
     return value ? true : false;
+}
+
+MMDB.decodeFloat <- function(size)
+{
+    local pos = MMDB.f.tell();
+    local result = MMDB.f.readn('f');
+    MMDB.f.seek(pos + 4);
+    return result;
 }
