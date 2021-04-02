@@ -107,11 +107,7 @@ MMDB.Lookup <- function(ipAddrStr)
                 local absoluteOffset = (recordVal - nodeCount) + treeSize; // given formula
                 MMDB.f.seek(absoluteOffset);
                 local info = MMDB.decodeData();
-
-                print("country: " + info.country.names.en + " (" + info.country.iso_code + ")\n");
-                print("continent: " + info.continent.names.en + "\n");
-                
-                return;
+                return info;
             }
         }
     }
