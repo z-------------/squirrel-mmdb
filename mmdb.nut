@@ -25,22 +25,8 @@ MMDB.metadataMarker[13] = 109;
 MMDB.OpenFile <- function(filename)
 {
     MMDB.f <- file(filename, "r");
-}
-
-MMDB.GetMetadata <- function()
-{
-    if (MMDB.Metadata == null)
-    {
-        // print("reading metadata.\n");
-        MMDB.f.seek(MMDB.getMetadataPos());
-        MMDB.Metadata <- MMDB.decodeData();
-    }
-    else
-    {
-        // print("already have metadata.\n");
-    }
-    
-    return MMDB.Metadata;
+    MMDB.f.seek(MMDB.getMetadataPos());
+    MMDB.Metadata <- MMDB.decodeData();
 }
 
 MMDB.Lookup <- function(ipAddrStr)
