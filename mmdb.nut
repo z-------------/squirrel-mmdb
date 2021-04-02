@@ -311,9 +311,9 @@ MMDB.decodeData <- function()
         case 9:
             return MMDB.decodeUInt(dataSize);
             break;
-        // case 10:
-        //     return MMDB.decodeUInt(dataSize);
-        //     break;
+        case 10:
+            return MMDB.decodeUInt(dataSize);
+            break;
         case 7:
             return MMDB.decodeMap(dataSize);
             break;
